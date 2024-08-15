@@ -1,0 +1,8 @@
+Becks et al 2005
+
+Reference: Becks, L., Hilker, F. M., Malchow, H., Jürgens, K., & Arndt, H. (2005). Experimental demonstration of chaos in a microbial food web. Nature, 435(7046), 1226-1229.
+
+Source: https://doi.org/10.5281/zenodo.2390198
+
+Details: 
+We used data from Fig 1 in Becks et al 2005. Time unit: days. Abundance units: number of cells/ml. For dilution rate of 0.45, we used data on panels h and i of Fig 1. We removed the first 5 points (transient dynamics). For dilution rate of 0.5, we used data on panels c, d, e, f, and g of Fig 1. Regarding panel c, we only used data up to time 29, prior to the shift to dilution rate of 0.75. Regarding panels f and g, we only used data starting from time 14 because of several missing values prior to that time. We removed the first 5 points (transient dynamics) in panels c, d, and e. For dilution rate of 0.75, we used data on panel b of Fig 1. We removed the first 5 points (transient dynamics). For dilution rate of 0.9, we used data on panel a of Fig 1. We removed the first 5 points (transient dynamics).
