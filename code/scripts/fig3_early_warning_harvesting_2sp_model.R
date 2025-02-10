@@ -8,7 +8,6 @@ rm(list = ls(all = TRUE))
 source("code/functions/logistic_1sp_map.R")
 source("code/functions/competition_3sp_map.R")
 source("code/functions/predator_prey_2sp_map.R")
-source("code/functions/harvesting_1sp_map.R")
 source("code/functions/harvesting_2sp_map.R")
 source("code/functions/ts_breakpoint.R")
 if (!require(ggplot2)) {install.packages("ggplot2"); library(ggplot2)}
@@ -191,7 +190,6 @@ if (log_abund) {
 # for each value of E, fit GP-EDM and evaluate prediction accuracy
 if (coordinates == "delay") {
   R2 <- c()
-  phi_control <- c()
   for (i in 1:length(E_values)) {
     # input names
     inputs <- paste(names(training_df)[sp_input + 1], E_values[1:i], sep = "_")
@@ -210,14 +208,12 @@ if (coordinates == "delay") {
                           x = inputs, scaling = "local",
                           fixedpars = c(rep(NA, length(inputs)-1), fixed_phi_control, NA, NA),
                           predictmethod = "loo")
-      phi_control[i] <- GP_fit_sp1$pars[E_values[i]+1]
     }
     if (sp_input == 2) {
       GP_fit_sp2 <- fitGP(data = full_training_lags, y = "x2", 
                           x = inputs, scaling = "local",
                           fixedpars = c(rep(NA, length(inputs)-1), fixed_phi_control, NA, NA),
                           predictmethod = "loo")
-      phi_control[i] <- GP_fit_sp2$pars[E_values[i]+1]
     }
     # compute R2
     if (sp_input == 1) {
@@ -237,11 +233,7 @@ if (coordinates == "delay") {
     R2[i] <- 1 - (sum((R2_df$obs - R2_df$predmean)^2) / sum((R2_df$obs - mean(R2_df$obs))^2))
   }
   # select best embedding dimension
-  if (is.na(fixed_phi_control)) {
-    E <- which.max(R2)
-  } else {
-    E <- which.max(R2)
-  }
+  E <- which.max(R2)
 }
 
 # reconstruct bifurcation diagrams by sequentially increasing time series ------------------------------ 
