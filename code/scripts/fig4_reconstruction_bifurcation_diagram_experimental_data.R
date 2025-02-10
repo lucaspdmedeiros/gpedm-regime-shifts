@@ -9,6 +9,7 @@ if (!require(viridis)) {install.packages("viridis"); library(viridis)}
 if (!require(GPEDM)) {install.packages("GPEDM"); library(GPEDM)}
 if (!require(tidyverse)) {install.packages("tidyverse"); library(tidyverse)}
 if (!require(latex2exp)) {install.packages("latex2exp"); library(latex2exp)}
+if (!require(scales)) {install.packages("scales"); library(scales)}
 
 # set up ------------------------------ 
 # whether to save plots
@@ -30,6 +31,7 @@ if (coordinates == "native") {
 }
 if (coordinates == "delay") {
   sp_input <- 1
+  sp_plot <- sp_input
 }
 # whether to scale data within each treatment
 treatment_scaling <- TRUE
@@ -262,8 +264,10 @@ if (coordinates == "delay") {
     }
   }
   plot_df <- full_training_lags
+  # compute prediction errors
+  plot_df$residuals <- plot_df$obs - plot_df$predmean
 }
-# fit GP-EDM in delay coordinates
+# fit GP-EDM in native coordinates
 if (coordinates == "native") {
   # input names
   inputs <- paste(rep(names(training_df)[sp_input + 1], each = E), 1:E, sep = "_")
@@ -332,6 +336,8 @@ if (log_abund) {
   plot_df$obs <- exp(plot_df$obs)
   plot_df$predmean <- exp(plot_df$predmean)
 }
+# compute prediction errors
+plot_df$residuals <- plot_df$obs - plot_df$predmean
 if (sp_input == 1) {
   sp_name <- "Predator abundance (ind/ml)"
 }
@@ -341,6 +347,7 @@ if (sp_input == 2) {
 if (sp_input == 3) {
   sp_name <- "Less-preferred prey abundance (cells/ml)"
 }
+# plot observations and predictions
 fig <- ggplot(data = plot_df) +
   geom_line(aes(x = time, y = obs), size = 1, color = "black") +
   geom_line(aes(x = time, y = predmean), size = 1, color = "#CB181D") +
@@ -358,6 +365,71 @@ fig <- ggplot(data = plot_df) +
         axis.title = element_text(size = 17),
         axis.text.x = element_text(size = 14),
         axis.text.y = element_text(size = 14))
+
+# residual plots ------------------------------ 
+if (coordinates == "delay") {
+  # plot residual autocorrelation
+  residuals_df <- as.data.frame(makelags(data = plot_df, y = "residuals", 
+                                         time = "time", E = max(E_values), tau = tau))
+  auto_cor <- apply(X = residuals_df, MARGIN = 2, FUN = function(x, y) cor(x, y, use = "complete.obs"), 
+                    y = plot_df$residuals)
+  auto_cor_df <- data.frame(lag = 1:max(E_values), auto_cor = auto_cor)
+  fig <- ggplot(data = auto_cor_df) +
+    geom_hline(yintercept = 0, linetype = "dashed", size = 1) +
+    geom_bar(aes(x = lag, y = auto_cor), stat="identity", size = 1, width = 0.5,
+             color = "black", fill = "gray70") +
+    scale_x_continuous(n.breaks = max(E_values)) +
+    xlab(label = "Lag") +
+    ylab(label = "Residual\nautocorrelation") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_rect(size = 1.2),
+          strip.text = element_text(size = 16),
+          strip.background = element_rect(fill = "white", size = 1.2),
+          title = element_text(size = 14),
+          axis.title = element_text(size = 22),
+          axis.text.x = element_text(size = 18),
+          axis.text.y = element_text(size = 18))
+  # plot residual distribution
+  fig <- ggplot(data = plot_df) +
+    geom_density(aes(x = residuals), size = 1, color = "black", fill = "gray70") +
+    xlab(label = "Residuals") +
+    ylab(label = "Density") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_rect(size = 1.2),
+          strip.text = element_text(size = 16),
+          strip.background = element_rect(fill = "white", size = 1.2),
+          title = element_text(size = 14),
+          axis.title = element_text(size = 22),
+          axis.text.x = element_text(size = 18),
+          axis.text.y = element_text(size = 18))
+  # plot residuals vs state variables
+  residuals_df <- plot_df[ , c(inputs[1:E], "residuals")]
+  names(residuals_df) <- c(c(paste("lag", 1:E, sep = " "), "residuals"))
+  residuals_df <- gather(residuals_df, "lag", "value", names(residuals_df)[-ncol(residuals_df)])
+  fig <- ggplot(data = residuals_df) +
+    geom_point(aes(x = residuals, y = value), size = 2) +
+    facet_wrap(~lag, ncol = ceiling(E/2)) +
+    xlab(label = "Residuals") +
+    ylab(label = "Abundance") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_rect(size = 1.2),
+          strip.text = element_text(size = 18),
+          strip.background = element_rect(fill = "white", size = 1.2),
+          title = element_text(size = 14),
+          axis.title = element_text(size = 22),
+          axis.text.x = element_text(size = 18),
+          axis.text.y = element_text(size = 18),
+          legend.position = "bottom",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 14),
+          legend.key.size = unit(0.6, 'cm'))
+}
 
 # make predictions for a range of dilution rate values ------------------------------ 
 # observed dilution rate values
@@ -418,14 +490,14 @@ for (i in 1:length(dilution_grid)) {
 # plot predicted bifurcation diagrams ------------------------------ 
 # data frame to plot
 plot_df <- full_test_set
-sp_plot <- 1
-# plot settings
+# backtransform logged abundances
 if (log_abund) {
   plot_df[ , -c(1, ncol(plot_df))] <- 
     exp(plot_df[ , -c(1, ncol(plot_df))])
   training_df[ , 2:(n_sp+1)] <- 
     exp(training_df[ , 2:(n_sp+1)])
 }
+# plot settings
 if (coordinates == "delay") {
   R2_chosen <- R2[E]
   if (sp_input == 1) {
@@ -496,6 +568,7 @@ fig <- ggplot() +
   geom_point(data = training_df, aes(x = dilution, y = abundance),
              shape = 21, size = 3.5, fill = sp_col_data) +
   scale_x_continuous(limits = c(min(dilution_grid), max(dilution_grid))) +
+  scale_y_continuous(labels = label_number(accuracy = 0.1)) +
   xlab(label = "Dilution rate") +
   ylab(label = "Population abundance") +
   theme_bw() +
