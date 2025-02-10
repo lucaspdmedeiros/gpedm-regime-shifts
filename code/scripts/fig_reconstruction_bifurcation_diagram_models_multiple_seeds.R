@@ -7,7 +7,6 @@ rm(list = ls(all = TRUE))
 source("code/functions/logistic_1sp_map.R")
 source("code/functions/competition_3sp_map.R")
 source("code/functions/predator_prey_2sp_map.R")
-source("code/functions/harvesting_1sp_map.R")
 source("code/functions/harvesting_2sp_map.R")
 source("code/functions/jensen_shannon.R")
 if (!require(ggplot2)) {install.packages("ggplot2"); library(ggplot2)}
@@ -31,6 +30,7 @@ control_noise <- 0
 n_seeds <- 10
 # to save results
 jsd_results_df <- data.frame()
+E_results <- c()
 
 # perform analysis using several random seeds ------------------------------ 
 for (n in 1:n_seeds) {
@@ -46,18 +46,6 @@ for (n in 1:n_seeds) {
     parms <- list(p = NA, s_mean = NA, s_sd = NA)
     s <- 0.02
     control_name <- "Intrinsic growth rate"
-    log_abund <- FALSE
-  }
-  if (func_name == "harvesting_1sp_map") {
-    set.seed(n)
-    n_sp <- 1
-    func <- harvesting_1sp_map
-    x_init <- c(x1 = 0.5)
-    control_true <- seq(0.21, 0.31, by = 0.0005)
-    control_gp <- c(0.21, 0.25, 0.27, 0.31)
-    parms <- list(r = 1, k = 1, p = NA, a = 0.1, s_mean = NA, s_sd = NA)
-    s <- 0.02
-    control_name <- "Harvest rate"
     log_abund <- FALSE
   }
   if (func_name == "harvesting_2sp_map") {
@@ -97,7 +85,7 @@ for (n in 1:n_seeds) {
                   s_mean = NA, s_sd = NA)
     s <- 0.02
     control_name <- "Intrinsic growth rate"
-    log_abund <- TRUE
+    log_abund <- FALSE
   }
   # to name files
   if (log_abund) {
@@ -108,22 +96,15 @@ for (n in 1:n_seeds) {
   # grid of embedding dimension values and time lag value
   E_values <- 1:9
   tau <- 1
-  # defining coordinates to use
+  # define species to use in plots and analyses
   if (coordinates == "native") {
     E <- 1
+    sp_input <- 1:n_sp
     sp_plot <- 1
-    if (n_sp == 1) {
-      sp_input <- 1
-    }
-    if (n_sp == 2) {
-      sp_input <- c(1, 2)
-    }
-    if (n_sp == 3) {
-      sp_input <- c(1, 2, 3)
-    }
   }
   if (coordinates == "delay") {
     sp_input <- 1
+    sp_plot <- sp_input
   }
   # full time series length
   t_max_full <- 500
@@ -178,13 +159,13 @@ for (n in 1:n_seeds) {
                           (abs(results_noise$control - control_gp[4]) < tol))
   # plot time series used to train the GP-EDM model
   if (n_sp == 1) {
-    plot_df <- gather(training_df, species, density, x1)
+    plot_df <- gather(training_df, "species", "density", x1)
   }
   if (n_sp == 2) {
-    plot_df <- gather(training_df, species, density, x1:x2)
+    plot_df <- gather(training_df, "species", "density", x1:x2)
   }
   if (n_sp == 3) {
-    plot_df <- gather(training_df, species, density, x1:x3)
+    plot_df <- gather(training_df, "species", "density", x1:x3)
   }
   # create data frame with all lags
   training_list <- split(training_df, training_df$control)
@@ -250,11 +231,7 @@ for (n in 1:n_seeds) {
       R2[i] <- 1 - (sum((R2_df$obs - R2_df$predmean)^2) / sum((R2_df$obs - mean(R2_df$obs))^2))
     }
     # select best embedding dimension
-    if (is.na(fixed_phi_control)) {
-      E <- which.max(R2)
-    } else {
-      E <- which.max(R2)
-    }
+    E <- which.max(R2)
   }
   
   # fit GP-EDM to data using best embedding dimension ------------------------------ 
@@ -439,16 +416,18 @@ for (n in 1:n_seeds) {
   # merge data frames with true and predicted bifurcation diagrams
   results_no_noise$type <- "true"
   full_test_set$type <- "predicted"
+  # set negative predictions to zero
+  full_test_set[, sp_plot + 1][full_test_set[, sp_plot + 1] < 0] <- 0
   # start and end points for bins
-  start_bin <- min(c(results_no_noise$x1, full_test_set$x1))
-  end_bin <- max(c(results_no_noise$x1, full_test_set$x1))
+  start_bin <- min(c(results_no_noise[ , sp_plot + 1], full_test_set[ , sp_plot + 1]))
+  end_bin <- max(c(results_no_noise[ , sp_plot + 1], full_test_set[ , sp_plot + 1]))
   bin_number <- list(10, 11, 12, 13, 14, 15)
   # loop over control values and compute Jensen-Shannon divergence
   jsd <- c()
   for (i in 1:length(control_true)) {
     # samples from probability distributions
-    x <- results_no_noise$x1[results_no_noise$control == control_true[i]]
-    y <- full_test_set$x1[full_test_set$control == control_true[i]]
+    x <- results_no_noise[results_no_noise$control == control_true[i], sp_plot + 1]
+    y <- full_test_set[full_test_set$control == control_true[i], sp_plot + 1]
     # establish bin size according to the Freedman–Diaconis rule
     bin_size <- 2 * (quantile(c(x, y))[4] - quantile(c(x, y))[2]) / 
       length(c(x, y))^(1/3)
@@ -467,7 +446,8 @@ for (n in 1:n_seeds) {
       exp(plot_df[ , -c(1, ncol(plot_df)-1, ncol(plot_df))])
   }
   # plot true and predicted together
-  fig <- ggplot(data = plot_df, aes(x = control, y = x1, color = type)) +
+  plot_df$x <- plot_df[ , sp_plot + 1]
+  fig <- ggplot(data = plot_df, aes(x = control, y = x, color = type)) +
     geom_point(size = 0.8) +
     geom_vline(xintercept = control_gp, linetype = "dashed", size = 0.8) +
     scale_color_manual(values = c("#CB181D", "#919191")) +
@@ -475,7 +455,7 @@ for (n in 1:n_seeds) {
     scale_y_continuous(limits = c(min(plot_df$x1), max(plot_df$x1)),
                        labels = scales::number_format(accuracy = 0.01)) +
     xlab(label = control_name) +
-    ylab(label = "Abundance (species 1)") +
+    ylab(label = paste("Abundance (species ", sp_plot, ")", sep = "")) +
     theme_bw() +
     guides(color = guide_legend(override.aes = list(size = 3))) +
     theme(panel.grid.major = element_blank(),
@@ -488,7 +468,8 @@ for (n in 1:n_seeds) {
           legend.title = element_blank(),
           legend.text = element_text(size = 14),
           legend.key.size = unit(0.6, 'cm'))
-  print(fig)
+  # store current E
+  E_results[n] <- E
 }
 
 # plot of Jensen-Shannon divergence for multiple training data sets ------------------------------ 
@@ -502,23 +483,23 @@ fig <- ggplot() +
   geom_line(data = jsd_results_df, aes(x = control, y = jsd, 
                                        group = seed, color = type, 
                                        size = type)) +
-  geom_vline(xintercept = control_gp, linetype = "dashed", size = 0.7) +
+  geom_vline(xintercept = control_gp, linetype = "dashed", size = 0.8) +
   scale_y_continuous(limits = c(0, 1)) +
   scale_color_manual(values = c("gray70", "black")) +
-  scale_size_manual(values = c(0.7, 1.4)) +
+  scale_size_manual(values = c(0.8, 1.6)) +
   xlab(label = control_name) +
-  ylab(label = "Jensen-Shannon\ndivergence") +
+  ylab(label = "JSD") +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.border = element_rect(size = 1),
-        axis.title = element_text(size = 18),
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 14),
+        axis.title = element_text(size = 22),
+        axis.text.x = element_text(size = 16),
+        axis.text.y = element_text(size = 16),
         legend.position = "none")
 if (save_plots) {
   ggsave(paste("figs/fig_", func_name, "_jsd_", coordinates, 
                "_sp_input_", paste(sp_input, collapse = "_"), "_control_phi_", fixed_phi_control,
-               "_E_", E, "_", log_abund_name, "_multiple_seeds.pdf", sep = ""), 
+               "_", log_abund_name, "_s_", s, "_multiple_seeds.pdf", sep = ""), 
          fig, width = 18, height = 8, units = "cm")
 }
