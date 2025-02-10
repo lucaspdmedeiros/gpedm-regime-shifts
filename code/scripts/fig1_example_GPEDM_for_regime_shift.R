@@ -7,7 +7,6 @@ rm(list = ls(all = TRUE))
 source("code/functions/logistic_1sp_map.R")
 source("code/functions/competition_3sp_map.R")
 source("code/functions/predator_prey_2sp_map.R")
-source("code/functions/harvesting_1sp_map.R")
 source("code/functions/harvesting_2sp_map.R")
 if (!require(ggplot2)) {install.packages("ggplot2"); library(ggplot2)}
 if (!require(viridis)) {install.packages("viridis"); library(viridis)}
@@ -17,7 +16,7 @@ if (!require(latex2exp)) {install.packages("latex2exp"); library(latex2exp)}
 
 # set up ------------------------------ 
 # set seed to make results reproducible
-set.seed(9)
+set.seed(10)
 # whether to save plots
 save_plots <- TRUE
 # model to use
@@ -83,7 +82,7 @@ if (func_name == "predator_prey_2sp_map") {
   control_test <- c(2.5, 2.8, 3, 3.3)
   parms <- list(r = 2.5, k = 4, p = NA, h = 0.1, e = 0.5, m = 2, 
                 s_mean = NA, s_sd = NA)
-  E <- 5
+  E <- 4
   sp_input <- 1
   tau <- 1
   s <- 0.02
@@ -137,7 +136,7 @@ plot_df <- gather(training_df, species, density, x1:x2)
 names(plot_df) <- c("time", "p", "species", "density")
 plot_df$p <- as.factor(plot_df$p)
 fig <- ggplot(data = plot_df, aes(x = time, y = density, color = p)) +
-  geom_line(aes(linetype = species), size = 1) +
+  geom_line(aes(linetype = species), size = 0.8) +
   scale_color_viridis(name = "Attack\nrate (p)", discrete = TRUE) +
   facet_wrap(~p, labeller = "label_both", ncol = length(control_gp), scales = "free_x") +
   xlab(label = "Time") +
@@ -183,9 +182,8 @@ x1_1 <- seq(1, 4, by = 0.05)
 x1_2 <- mean(full_training_lags$x1_2, na.rm = TRUE)
 x1_3 <- mean(full_training_lags$x1_3, na.rm = TRUE)
 x1_4 <- mean(full_training_lags$x1_4, na.rm = TRUE)
-x1_5 <- mean(full_training_lags$x1_5, na.rm = TRUE)
 # create grid with control parameter and abundances
-cond_resp_df <- expand_grid(p, x1_1, x1_2, x1_3, x1_4, x1_5)
+cond_resp_df <- expand_grid(p, x1_1, x1_2, x1_3, x1_4)
 names(cond_resp_df) <- c("control_1", paste("x1_", 1:E, sep = ""))
 cond_resp_df$x1 <- predict(GP_fit_sp1, newdata = cond_resp_df)$outsampresults$predmean
 names(cond_resp_df) <- c("p", paste("x1_", 1:E, sep = ""), "x1")
@@ -292,7 +290,8 @@ names(plot_df) <- c("time", "x", "y", "p", "type")
 plot_df$p <- as.factor(plot_df$p)
 plot_df$type <- factor(plot_df$type, levels = c("Predicted", "True"))
 fig <- ggplot(data = plot_df, aes(x = time, y = x, group = type, color = type)) +
-  geom_line(size = 1) +
+  geom_line(size = 0.8) +
+  geom_point(size = 1.4) +
   scale_color_manual(values = c("#CB181D", "#919191")) +
   facet_grid(type~p, labeller = "label_both", scales = "free_x") +
   xlab(label = "Time") +
