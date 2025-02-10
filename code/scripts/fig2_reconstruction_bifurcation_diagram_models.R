@@ -8,7 +8,6 @@ rm(list = ls(all = TRUE))
 source("code/functions/logistic_1sp_map.R")
 source("code/functions/competition_3sp_map.R")
 source("code/functions/predator_prey_2sp_map.R")
-source("code/functions/harvesting_1sp_map.R")
 source("code/functions/harvesting_2sp_map.R")
 source("code/functions/jensen_shannon.R")
 if (!require(ggplot2)) {install.packages("ggplot2"); library(ggplot2)}
@@ -20,7 +19,7 @@ if (!require(tidyverse)) {install.packages("tidyverse"); library(tidyverse)}
 # whether to save plots
 save_plots <- TRUE
 # model to use
-func_name <- "logistic_1sp_map"
+func_name <- "predator_prey_2sp_map"
 # whether to use native or delay coordinates
 coordinates <- "delay"
 # rate of change of control parameter
@@ -40,18 +39,6 @@ if (func_name == "logistic_1sp_map") {
   control_name <- "Intrinsic growth rate"
   log_abund <- FALSE
 }
-if (func_name == "harvesting_1sp_map") {
-  set.seed(1)
-  n_sp <- 1
-  func <- harvesting_1sp_map
-  x_init <- c(x1 = 0.5)
-  control_true <- seq(0.21, 0.31, by = 0.0005)
-  control_gp <- c(0.21, 0.25, 0.27, 0.31)
-  parms <- list(r = 1, k = 1, p = NA, a = 0.1, s_mean = NA, s_sd = NA)
-  s <- 0.02
-  control_name <- "Harvest rate"
-  log_abund <- FALSE
-}
 if (func_name == "harvesting_2sp_map") {
   set.seed(5)
   n_sp <- 2
@@ -66,7 +53,7 @@ if (func_name == "harvesting_2sp_map") {
   log_abund <- FALSE
 }
 if (func_name == "predator_prey_2sp_map") {
-  set.seed(9)
+  set.seed(10)
   n_sp <- 2
   func <- predator_prey_2sp_map
   x_init <- c(x1 = 1, x2 = 1)
@@ -79,7 +66,7 @@ if (func_name == "predator_prey_2sp_map") {
   log_abund <- FALSE
 }
 if (func_name == "competition_3sp_map") {
-  set.seed(10)
+  set.seed(8)
   n_sp <- 3
   func <- competition_3sp_map
   x_init <- c(x1 = 0.5, x2 = 0.5, x3 = 0.5)
@@ -89,7 +76,7 @@ if (func_name == "competition_3sp_map") {
                 s_mean = NA, s_sd = NA)
   s <- 0.02
   control_name <- "Intrinsic growth rate"
-  log_abund <- TRUE
+  log_abund <- FALSE
 }
 # to name files
 if (log_abund) {
@@ -100,22 +87,15 @@ if (log_abund) {
 # grid of embedding dimension values and time lag value
 E_values <- 1:9
 tau <- 1
-# defining coordinates to use
+# define species to use in plots and analyses
 if (coordinates == "native") {
   E <- 1
+  sp_input <- 1:n_sp
   sp_plot <- 1
-  if (n_sp == 1) {
-    sp_input <- 1
-  }
-  if (n_sp == 2) {
-    sp_input <- c(1, 2)
-  }
-  if (n_sp == 3) {
-    sp_input <- c(1, 2, 3)
-  }
 }
 if (coordinates == "delay") {
   sp_input <- 1
+  sp_plot <- sp_input
 }
 # full time series length
 t_max_full <- 500
@@ -165,7 +145,7 @@ fig <- ggplot(data = results_no_noise, aes(x = control, y = x1)) +
   geom_point(size = 1, color = "#929292") +
   geom_vline(xintercept = control_gp, linetype = "dashed", size = 1) +
   xlab(label = control_name) +
-  ylab(label = "Abundance (species 1)") +
+  ylab(label = paste("Abundance (species ", sp_plot, ")", sep = "")) +
   theme_bw() +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
@@ -183,13 +163,13 @@ training_df <- subset(results_noise, (abs(results_noise$control - control_gp[1])
                         (abs(results_noise$control - control_gp[4]) < tol))
 # plot time series used to train the GP-EDM model
 if (n_sp == 1) {
-  plot_df <- gather(training_df, species, density, x1)
+  plot_df <- gather(training_df, "species", "density", x1)
 }
 if (n_sp == 2) {
-  plot_df <- gather(training_df, species, density, x1:x2)
+  plot_df <- gather(training_df, "species", "density", x1:x2)
 }
 if (n_sp == 3) {
-  plot_df <- gather(training_df, species, density, x1:x3)
+  plot_df <- gather(training_df, "species", "density", x1:x3)
 }
 fig <- ggplot(data = plot_df, aes(x = time, y = density, group = species, color = species)) +
   geom_line(size = 1) +
@@ -273,11 +253,7 @@ if (coordinates == "delay") {
     R2[i] <- 1 - (sum((R2_df$obs - R2_df$predmean)^2) / sum((R2_df$obs - mean(R2_df$obs))^2))
   }
   # select best embedding dimension
-  if (is.na(fixed_phi_control)) {
-    E <- which.max(R2)
-  } else {
-    E <- which.max(R2)
-  }
+  E <- which.max(R2)
 }
 
 # fit GP-EDM to data using best embedding dimension ------------------------------ 
@@ -321,6 +297,8 @@ if (coordinates == "delay") {
     plot_df$obs <- exp(plot_df$obs)
     plot_df$predmean <- exp(plot_df$predmean)
   }
+  # compute prediction errors
+  plot_df$residuals <- plot_df$obs - plot_df$predmean
 }
 # fit GP-EDM in native coordinates
 if (coordinates == "native") {
@@ -366,12 +344,14 @@ if (coordinates == "native") {
     full_training_lags$obs <- GP_fit_sp3$outsampresults$obs
     full_training_lags$predmean <- GP_fit_sp3$outsampresults$predmean
   }
-  # compute R2
   plot_df <- full_training_lags
   if (log_abund) {
     plot_df$obs <- exp(plot_df$obs)
     plot_df$predmean <- exp(plot_df$predmean)
   }
+  # compute prediction errors
+  plot_df$residuals <- plot_df$obs - plot_df$predmean
+  # compute R2
   R2_df <- full_training_lags
   R2_df <- na.omit(R2_df)
   if (log_abund) {
@@ -387,7 +367,7 @@ fig <- ggplot(data = plot_df) +
   geom_line(aes(x = time, y = obs), size = 1, color = "black") +
   geom_line(aes(x = time, y = predmean), size = 1, color = "#CB181D") +
   xlab(label = "Time") +
-  ylab(label = "Abundance (species 1)") +
+  ylab(label = paste("Abundance (species ", sp_plot, ")", sep = "")) +
   facet_wrap(~p,
              labeller = "label_both", nrow = 5) +
   theme_bw() +
@@ -400,6 +380,71 @@ fig <- ggplot(data = plot_df) +
         axis.title = element_text(size = 18),
         axis.text.x = element_text(size = 14),
         axis.text.y = element_text(size = 14))
+
+# residual plots ------------------------------ 
+if (coordinates == "delay") {
+  # plot residual autocorrelation
+  residuals_df <- as.data.frame(makelags(data = plot_df, y = "residuals", 
+                                         time = "time", E = max(E_values), tau = tau))
+  auto_cor <- apply(X = residuals_df, MARGIN = 2, FUN = function(x, y) cor(x, y, use = "complete.obs"), 
+                    y = plot_df$residuals)
+  auto_cor_df <- data.frame(lag = 1:max(E_values), auto_cor = auto_cor)
+  fig <- ggplot(data = auto_cor_df) +
+    geom_hline(yintercept = 0, linetype = "dashed", size = 1) +
+    geom_bar(aes(x = lag, y = auto_cor), stat="identity", size = 1, width = 0.5,
+             color = "black", fill = "gray70") +
+    scale_x_continuous(n.breaks = max(E_values)) +
+    xlab(label = "Lag") +
+    ylab(label = "Residual\nautocorrelation") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_rect(size = 1.2),
+          strip.text = element_text(size = 16),
+          strip.background = element_rect(fill = "white", size = 1.2),
+          title = element_text(size = 14),
+          axis.title = element_text(size = 22),
+          axis.text.x = element_text(size = 18),
+          axis.text.y = element_text(size = 18))
+  # plot residual distribution
+  fig <- ggplot(data = plot_df) +
+    geom_density(aes(x = residuals), size = 1, color = "black", fill = "gray70") +
+    xlab(label = "Residuals") +
+    ylab(label = "Density") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_rect(size = 1.2),
+          strip.text = element_text(size = 16),
+          strip.background = element_rect(fill = "white", size = 1.2),
+          title = element_text(size = 14),
+          axis.title = element_text(size = 22),
+          axis.text.x = element_text(size = 18),
+          axis.text.y = element_text(size = 18))
+  # plot residuals vs state variables
+  residuals_df <- plot_df[ , c(inputs[1:E], "residuals")]
+  names(residuals_df) <- c(c(paste("lag", 1:E, sep = " "), "residuals"))
+  residuals_df <- gather(residuals_df, "lag", "value", names(residuals_df)[-ncol(residuals_df)])
+  fig <- ggplot(data = residuals_df) +
+    geom_point(aes(x = residuals, y = value), size = 2) +
+    facet_wrap(~lag, ncol = ceiling(E/2)) +
+    xlab(label = "Residuals") +
+    ylab(label = "Abundance") +
+    theme_bw() +
+    theme(panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          panel.border = element_rect(size = 1.2),
+          strip.text = element_text(size = 18),
+          strip.background = element_rect(fill = "white", size = 1.2),
+          title = element_text(size = 14),
+          axis.title = element_text(size = 22),
+          axis.text.x = element_text(size = 18),
+          axis.text.y = element_text(size = 18),
+          legend.position = "bottom",
+          legend.title = element_blank(),
+          legend.text = element_text(size = 14),
+          legend.key.size = unit(0.6, 'cm'))
+}
 
 # make predictions for the whole range of control parameter values ------------------------------ 
 full_test_set <- data.frame()
@@ -483,16 +528,18 @@ for (i in 1:length(control_true)) {
 # merge data frames with true and predicted bifurcation diagrams
 results_no_noise$type <- "true"
 full_test_set$type <- "predicted"
+# set negative predictions to zero
+full_test_set[, sp_plot + 1][full_test_set[, sp_plot + 1] < 0] <- 0
 # start and end points for bins
-start_bin <- min(c(results_no_noise$x1, full_test_set$x1))
-end_bin <- max(c(results_no_noise$x1, full_test_set$x1))
+start_bin <- min(c(results_no_noise[ , sp_plot + 1], full_test_set[ , sp_plot + 1]))
+end_bin <- max(c(results_no_noise[ , sp_plot + 1], full_test_set[ , sp_plot + 1]))
 bin_number <- list(10, 11, 12, 13, 14, 15)
 # loop over control values and compute Jensen-Shannon divergence
 jsd <- c()
 for (i in 1:length(control_true)) {
   # samples from probability distributions
-  x <- results_no_noise$x1[results_no_noise$control == control_true[i]]
-  y <- full_test_set$x1[full_test_set$control == control_true[i]]
+  x <- results_no_noise[results_no_noise$control == control_true[i], sp_plot + 1]
+  y <- full_test_set[full_test_set$control == control_true[i], sp_plot + 1]
   # establish bin size according to the Freedman–Diaconis rule
   bin_size <- 2 * (quantile(c(x, y))[4] - quantile(c(x, y))[2]) / 
     length(c(x, y))^(1/3)
@@ -536,15 +583,16 @@ if (log_abund) {
     exp(plot_df[ , -c(1, ncol(plot_df)-1, ncol(plot_df))])
 }
 # plot true and predicted together
-fig <- ggplot(data = plot_df, aes(x = control, y = x1, color = type)) +
+plot_df$x <- plot_df[ , sp_plot + 1]
+fig <- ggplot(data = plot_df, aes(x = control, y = x, color = type)) +
   geom_point(size = 0.8) +
   geom_vline(xintercept = control_gp, linetype = "dashed", size = 0.8) +
   scale_color_manual(values = c("#CB181D", "#919191")) +
   scale_x_continuous(limits = c(min(control_true), max(control_true))) +
-  scale_y_continuous(limits = c(min(plot_df$x1), max(plot_df$x1)),
+  scale_y_continuous(limits = c(min(plot_df$x), max(plot_df$x)),
                      labels = scales::number_format(accuracy = 0.01)) +
   xlab(label = control_name) +
-  ylab(label = "Abundance (species 1)") +
+  ylab(label = paste("Abundance (species ", sp_plot, ")", sep = "")) +
   theme_bw() +
   guides(color = guide_legend(override.aes = list(size = 3))) +
   theme(panel.grid.major = element_blank(),
