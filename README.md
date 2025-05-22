@@ -1,6 +1,6 @@
 # Revealing unseen dynamical regimes of ecosystems from population time-series data
 
-This repository contains the code and data associated with the [bioRxiv preprint](https://www.biorxiv.org/content/10.1101/2024.08.07.607005v1): Medeiros, L. P., Sorenson, D. K., Johnson, B. J., Palkovacs, E. P., and Munch, S. B. (2024). Revealing unseen dynamical regimes of ecosystems from population time-series data.
+This repository contains the code and data associated with the paper: Medeiros, L. P., Sorenson, D. K., Johnson, B. J., Palkovacs, E. P., and Munch, S. B. (2025). Revealing unseen dynamical regimes of ecosystems from population time-series data. *Proceedings of the National Academy of Sciences*.
 
 In this study, we introduce an approach that integrates population time-series data and information on an environmental driver into a Gaussian Process regression model with time-delay embedding (GP-EDM) to predict previously unseen dynamical regimes of ecosystems.
 
